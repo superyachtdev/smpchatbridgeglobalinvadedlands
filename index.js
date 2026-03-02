@@ -3,6 +3,7 @@ require("dotenv").config()
 const mineflayer = require("mineflayer")
 const { pathfinder, Movements, goals } = require("mineflayer-pathfinder")
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js")
+const path = require("path")
 
 let bot
 let reconnecting = false
@@ -28,7 +29,7 @@ function startBot() {
   username: process.env.MC_USERNAME,
   auth: "microsoft",
   version: "1.20.1",
-  profilesFolder: "/app/auth_cache", // IMPORTANT
+  profilesFolder: path.join(__dirname, "auth_cache"),
   skipValidation: true,
   disableChatSigning: true
 })
