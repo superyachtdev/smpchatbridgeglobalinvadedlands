@@ -5,8 +5,12 @@ const { pathfinder, Movements, goals } = require("mineflayer-pathfinder")
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js")
 
 let bot
-let reconnecting = false
 let discordClient
+
+console.log("====================================")
+console.log("Container started at:", new Date().toISOString())
+console.log("Process PID:", process.pid)
+console.log("====================================")
 
 // ================= DISCORD =================
 async function startDiscord() {
@@ -32,56 +36,39 @@ function startBot() {
     username: process.env.MC_USERNAME,
     auth: "microsoft",
     version: "1.20.1",
-    profilesFolder: "/app/auth_cache", // 🔥 MUST match Railway volume
+    profilesFolder: "/app/auth_cache",
     skipValidation: true,
     disableChatSigning: true
   })
 
   bot.loadPlugin(pathfinder)
 
-  // 🔥 LOGIN DEBUG
   bot.on("login", () => {
     console.log("✅ Minecraft login successful")
-    console.log("Logged in as MC username:", bot.username)
+    console.log("Logged in as:", bot.username)
   })
 
   bot.on("spawn", () => {
     console.log("🌲 SMP spawned successfully")
-    console.log("Entity username:", bot.username)
     setTimeout(() => walkToNPC(), 6000)
   })
 
   bot.on("kicked", (reason) => {
-  console.log("🚫 Kicked:", reason)
+    console.log("🚫 Kicked:", reason)
+  })
 
-  if (reason.includes("already connected")) {
-    console.log("🛑 Not reconnecting — account already online.")
-    return
-  }
-})
+  bot.on("error", (err) => {
+    console.log("❌ Bot error:", err.message)
 
-bot.on("error", (err) => {
-  console.log("❌ Bot error:", err.message)
+    if (err.message.includes("Failed to obtain profile data")) {
+      console.log("🛑 Auth failure. Exiting process.")
+      process.exit(1)
+    }
+  })
 
-  if (err.message.includes("Failed to obtain profile data")) {
-    console.log("🛑 Auth failure detected. Not reconnecting.")
-    return
-  }
-})
-
-bot.on("end", () => {
-  console.log("⚠ Connection ended")
-
-  if (reconnecting) return
-  reconnecting = true
-
-  console.log("⏳ Reconnecting in 15 seconds...")
-
-  setTimeout(() => {
-    reconnecting = false
-    startBot()
-  }, 15000)
-})
+  bot.on("end", () => {
+    console.log("⚠ Connection ended — NOT reconnecting in debug mode.")
+  })
 
   bot.on("message", (jsonMsg) => {
     const raw = jsonMsg.toString().trim()
@@ -103,40 +90,17 @@ bot.on("end", () => {
     if (!username) return
 
     console.log(`[SMP CHAT] ${username} (${rank}): ${chat}`)
-
     sendToDiscord({ username, rank, message: chat })
   })
 }
 
-// ================= WALK + CLICK =================
+// ================= WALK =================
 async function walkToNPC() {
   console.log("🚶 Walking to SMP NPC...")
 
   const mcData = require("minecraft-data")(bot.version)
   bot.pathfinder.setMovements(new Movements(bot, mcData))
   bot.pathfinder.setGoal(new goals.GoalBlock(54, 94, 691))
-
-  bot.once("goal_reached", async () => {
-    console.log("🎯 Reached SMP NPC")
-
-    await bot.waitForTicks(20)
-
-    const entity = bot.nearestEntity(e =>
-      (e.type === "player" || e.type === "mob") &&
-      bot.entity.position.distanceTo(e.position) < 6
-    )
-
-    if (!entity) {
-      console.log("❌ No NPC found to click")
-      return
-    }
-
-    console.log("🖱 Clicking NPC:", entity.username || entity.name)
-
-    await bot.lookAt(entity.position.offset(0, entity.height, 0), true)
-    await bot.waitForTicks(10)
-    bot.activateEntity(entity)
-  })
 }
 
 // ================= DISCORD SEND =================
