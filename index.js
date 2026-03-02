@@ -6,10 +6,10 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js")
 
 let bot
 let discordClient
+let alreadyWalking = false
 
 console.log("====================================")
 console.log("Container started at:", new Date().toISOString())
-console.log("Process PID:", process.pid)
 console.log("====================================")
 
 // ================= DISCORD =================
@@ -24,11 +24,7 @@ async function startDiscord() {
 
 // ================= MINECRAFT BOT =================
 function startBot() {
-  console.log("====================================")
   console.log("🚀 Starting SMP Bot...")
-  console.log("Using MC account:", process.env.MC_USERNAME)
-  console.log("Auth folder: /app/auth_cache")
-  console.log("====================================")
 
   bot = mineflayer.createBot({
     host: process.env.MC_HOST,
@@ -43,47 +39,31 @@ function startBot() {
 
   bot.loadPlugin(pathfinder)
 
-  bot.on("login", () => {
-    console.log("✅ Minecraft login successful")
-    console.log("Logged in as:", bot.username)
+  bot.once("spawn", () => {
+    console.log("🌍 Spawned in HUB")
+    setTimeout(() => walkToNPC(), 5000)
   })
 
-  bot.on("spawn", () => {
-    console.log("🌲 SMP spawned successfully")
-    setTimeout(() => walkToNPC(), 6000)
-  })
-
-  bot.on("kicked", (reason) => {
+  bot.on("kicked", reason => {
     console.log("🚫 Kicked:", reason)
   })
 
-  bot.on("error", (err) => {
-    console.log("❌ Bot error:", err.message)
+  bot.on("error", err => {
+    console.log("❌ Error:", err.message)
   })
 
-  bot.on("end", () => {
-    console.log("⚠ Connection ended")
-  })
-
-  // ================= CHAT DEBUG =================
   bot.on("message", (jsonMsg) => {
     const raw = jsonMsg.toString().trim()
+    console.log("📨 RAW:", raw)
 
-    // 🔥 SHOW EVERYTHING SMP SENDS
-    console.log("📨 RAW MESSAGE:", raw)
-
-    // Only continue if it looks like player chat
     if (!raw.includes(":")) return
 
     const colon = raw.indexOf(":")
     let before = raw.slice(0, colon).trim()
     const chat = raw.slice(colon + 1).trim()
-
     if (!chat) return
 
     let rank = "Default"
-
-    // Diamond rank detection
     if (before.startsWith("+")) {
       rank = "Diamond"
       before = before.substring(1).trim()
@@ -96,43 +76,60 @@ function startBot() {
 
     if (!username) return
 
-    console.log(`[SMP CHAT DETECTED] ${username} (${rank}): ${chat}`)
-
+    console.log(`[SMP CHAT] ${username}: ${chat}`)
     sendToDiscord({ username, rank, message: chat })
   })
 }
 
-// ================= WALK =================
+// ================= WALK + CLICK =================
 async function walkToNPC() {
-  console.log("🚶 Walking to SMP NPC...")
+  if (alreadyWalking) return
+  alreadyWalking = true
+
+  console.log("🚶 Walking to SMP NPC (54 94 691)...")
 
   const mcData = require("minecraft-data")(bot.version)
   bot.pathfinder.setMovements(new Movements(bot, mcData))
   bot.pathfinder.setGoal(new goals.GoalBlock(54, 94, 691))
+
+  bot.once("goal_reached", async () => {
+    console.log("🎯 Reached SMP location")
+
+    await bot.waitForTicks(20)
+
+    const entity = bot.nearestEntity(e => {
+      if (!e.position) return false
+      const dist = bot.entity.position.distanceTo(e.position)
+      return (
+        dist < 5 &&
+        (e.type === "mob" || e.type === "player")
+      )
+    })
+
+    if (!entity) {
+      console.log("❌ No NPC found — retrying in 5s")
+      alreadyWalking = false
+      return setTimeout(walkToNPC, 5000)
+    }
+
+    console.log("🖱 Clicking entity:", entity.username || entity.name)
+
+    await bot.lookAt(entity.position.offset(0, entity.height, 0), true)
+    await bot.waitForTicks(10)
+    bot.activateEntity(entity)
+
+    console.log("✅ Clicked SMP NPC")
+  })
 }
 
 // ================= DISCORD SEND =================
 async function sendToDiscord(data) {
   try {
-    if (!process.env.DISCORD_CHANNEL_ID) {
-      console.log("❌ DISCORD_CHANNEL_ID not set")
-      return
-    }
-
     const channel = await discordClient.channels.fetch(process.env.DISCORD_CHANNEL_ID)
-
-    if (!channel) {
-      console.log("❌ Channel not found")
-      return
-    }
-
-    const colors = {
-      Default: 0xAAAAAA,
-      Diamond: 0x00FFFF
-    }
+    if (!channel) return
 
     const embed = new EmbedBuilder()
-      .setColor(colors[data.rank] || 0xAAAAAA)
+      .setColor(data.rank === "Diamond" ? 0x00FFFF : 0xAAAAAA)
       .setAuthor({
         name: data.username,
         iconURL: `https://mc-heads.net/avatar/${encodeURIComponent(data.username)}`
@@ -146,11 +143,8 @@ async function sendToDiscord(data) {
       .setTimestamp()
 
     await channel.send({ embeds: [embed] })
-
-    console.log("✅ Sent to Discord successfully")
-
   } catch (err) {
-    console.log("❌ Discord send error:", err.message)
+    console.log("❌ Discord error:", err.message)
   }
 }
 
