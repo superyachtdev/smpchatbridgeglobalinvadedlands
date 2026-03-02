@@ -23,14 +23,15 @@ function startBot() {
   console.log("🚀 Starting SMP Bot...")
 
   bot = mineflayer.createBot({
-    host: process.env.MC_HOST,
-    port: parseInt(process.env.MC_PORT),
-    username: process.env.MC_USERNAME,
-    auth: "microsoft",
-    version: "1.20.1",
-    skipValidation: true,
-    disableChatSigning: true
-  })
+  host: process.env.MC_HOST,
+  port: parseInt(process.env.MC_PORT),
+  username: process.env.MC_USERNAME,
+  auth: "microsoft",
+  version: "1.20.1",
+  profilesFolder: "/app/auth_cache", // IMPORTANT
+  skipValidation: true,
+  disableChatSigning: true
+})
 
   bot.loadPlugin(pathfinder)
 
