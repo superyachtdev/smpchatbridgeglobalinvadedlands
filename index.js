@@ -3,7 +3,6 @@ require("dotenv").config()
 const mineflayer = require("mineflayer")
 const { pathfinder, Movements, goals } = require("mineflayer-pathfinder")
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js")
-const path = require("path")
 
 let bot
 let reconnecting = false
@@ -21,24 +20,56 @@ async function startDiscord() {
 
 // ================= MINECRAFT BOT =================
 function startBot() {
+  console.log("====================================")
   console.log("🚀 Starting SMP Bot...")
+  console.log("Using MC account:", process.env.MC_USERNAME)
+  console.log("Auth folder: /app/auth_cache")
+  console.log("====================================")
 
   bot = mineflayer.createBot({
-  host: process.env.MC_HOST,
-  port: parseInt(process.env.MC_PORT),
-  username: process.env.MC_USERNAME,
-  auth: "microsoft",
-  version: "1.20.1",
-  profilesFolder: path.join(__dirname, "auth_cache"),
-  skipValidation: true,
-  disableChatSigning: true
-})
+    host: process.env.MC_HOST,
+    port: parseInt(process.env.MC_PORT),
+    username: process.env.MC_USERNAME,
+    auth: "microsoft",
+    version: "1.20.1",
+    profilesFolder: "/app/auth_cache", // 🔥 MUST match Railway volume
+    skipValidation: true,
+    disableChatSigning: true
+  })
 
   bot.loadPlugin(pathfinder)
 
-  bot.once("spawn", () => {
+  // 🔥 LOGIN DEBUG
+  bot.on("login", () => {
+    console.log("✅ Minecraft login successful")
+    console.log("Logged in as MC username:", bot.username)
+  })
+
+  bot.on("spawn", () => {
     console.log("🌲 SMP spawned successfully")
+    console.log("Entity username:", bot.username)
     setTimeout(() => walkToNPC(), 6000)
+  })
+
+  bot.on("kicked", (reason) => {
+    console.log("🚫 Kicked from server:", reason)
+  })
+
+  bot.on("error", (err) => {
+    console.log("❌ Bot error:", err)
+  })
+
+  bot.on("end", () => {
+    console.log("⚠ Connection ended")
+
+    if (reconnecting) return
+    reconnecting = true
+
+    console.log("⏳ Reconnecting in 10 seconds...")
+    setTimeout(() => {
+      reconnecting = false
+      startBot()
+    }, 10000)
   })
 
   bot.on("message", (jsonMsg) => {
@@ -52,7 +83,6 @@ function startBot() {
 
     let rank = "Default"
 
-    // Diamond rank has + prefix
     if (before.startsWith("+")) {
       rank = "Diamond"
       before = before.substring(1).trim()
@@ -61,23 +91,9 @@ function startBot() {
     const username = before.replace(/§[0-9a-fk-or]/gi, "").trim()
     if (!username) return
 
-    console.log(`[SMP] ${username} (${rank}): ${chat}`)
+    console.log(`[SMP CHAT] ${username} (${rank}): ${chat}`)
 
     sendToDiscord({ username, rank, message: chat })
-  })
-
-  bot.on("end", () => {
-    if (reconnecting) return
-    reconnecting = true
-    console.log("⚠ Disconnected. Reconnecting in 5s...")
-    setTimeout(() => {
-      reconnecting = false
-      startBot()
-    }, 5000)
-  })
-
-  bot.on("error", (err) => {
-    console.log("❌ Bot error:", err.message)
   })
 }
 
@@ -108,7 +124,6 @@ async function walkToNPC() {
 
     await bot.lookAt(entity.position.offset(0, entity.height, 0), true)
     await bot.waitForTicks(10)
-
     bot.activateEntity(entity)
   })
 }
