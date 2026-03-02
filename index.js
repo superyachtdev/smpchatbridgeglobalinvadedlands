@@ -24,8 +24,17 @@ const INAPPROPRIATE = [
 ]
 
 const TOXICITY = [
-  "fuck you","fk you","f u","stfu",
-  "you suck","idiot","loser","no life"
+  "fuck you",
+  "fk you",
+  "stfu",
+  "you suck",
+  "idiot",
+  "loser",
+  "no life"
+]
+
+const TOXICITY_REGEX = [
+  /\bf\s*u\b/i // matches standalone "f u"
 ]
 
 const SUICIDE = [
@@ -185,8 +194,11 @@ function runModeration(data) {
   if (INAPPROPRIATE.some(w => lower.includes(w)))
     violations.push("Inappropriate Topics")
 
-  if (TOXICITY.some(w => lower.includes(w)))
-    violations.push("Toxicity")
+  if (
+  TOXICITY.some(w => lower.includes(w)) ||
+  TOXICITY_REGEX.some(r => r.test(message))
+)
+  violations.push("Toxicity")
 
   if (SUICIDE.some(w => lower.includes(w)))
     violations.push("Suicide Encouragement")
