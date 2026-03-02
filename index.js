@@ -59,37 +59,45 @@ function startBot() {
 
   bot.on("error", (err) => {
     console.log("❌ Bot error:", err.message)
-
-    if (err.message.includes("Failed to obtain profile data")) {
-      console.log("🛑 Auth failure. Exiting process.")
-      process.exit(1)
-    }
   })
 
   bot.on("end", () => {
-    console.log("⚠ Connection ended — NOT reconnecting in debug mode.")
+    console.log("⚠ Connection ended")
   })
 
+  // ================= CHAT DEBUG =================
   bot.on("message", (jsonMsg) => {
     const raw = jsonMsg.toString().trim()
+
+    // 🔥 SHOW EVERYTHING SMP SENDS
+    console.log("📨 RAW MESSAGE:", raw)
+
+    // Only continue if it looks like player chat
     if (!raw.includes(":")) return
 
     const colon = raw.indexOf(":")
     let before = raw.slice(0, colon).trim()
     const chat = raw.slice(colon + 1).trim()
+
     if (!chat) return
 
     let rank = "Default"
 
+    // Diamond rank detection
     if (before.startsWith("+")) {
       rank = "Diamond"
       before = before.substring(1).trim()
     }
 
-    const username = before.replace(/§[0-9a-fk-or]/gi, "").trim()
+    const username = before
+      .replace(/§[0-9a-fk-or]/gi, "")
+      .replace(/&[0-9a-fk-or]/gi, "")
+      .trim()
+
     if (!username) return
 
-    console.log(`[SMP CHAT] ${username} (${rank}): ${chat}`)
+    console.log(`[SMP CHAT DETECTED] ${username} (${rank}): ${chat}`)
+
     sendToDiscord({ username, rank, message: chat })
   })
 }
@@ -105,37 +113,45 @@ async function walkToNPC() {
 
 // ================= DISCORD SEND =================
 async function sendToDiscord(data) {
-  if (!process.env.DISCORD_CHANNEL_ID) {
-    console.log("❌ DISCORD_CHANNEL_ID not set")
-    return
+  try {
+    if (!process.env.DISCORD_CHANNEL_ID) {
+      console.log("❌ DISCORD_CHANNEL_ID not set")
+      return
+    }
+
+    const channel = await discordClient.channels.fetch(process.env.DISCORD_CHANNEL_ID)
+
+    if (!channel) {
+      console.log("❌ Channel not found")
+      return
+    }
+
+    const colors = {
+      Default: 0xAAAAAA,
+      Diamond: 0x00FFFF
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor(colors[data.rank] || 0xAAAAAA)
+      .setAuthor({
+        name: data.username,
+        iconURL: `https://mc-heads.net/avatar/${encodeURIComponent(data.username)}`
+      })
+      .setDescription(`💬 **Message**\n> ${data.message}`)
+      .addFields({
+        name: "🏷 Rank",
+        value: `\`${data.rank}\``,
+        inline: true
+      })
+      .setTimestamp()
+
+    await channel.send({ embeds: [embed] })
+
+    console.log("✅ Sent to Discord successfully")
+
+  } catch (err) {
+    console.log("❌ Discord send error:", err.message)
   }
-
-  const channel = await discordClient.channels.fetch(process.env.DISCORD_CHANNEL_ID)
-  if (!channel) {
-    console.log("❌ Could not fetch Discord channel")
-    return
-  }
-
-  const colors = {
-    Default: 0xAAAAAA,
-    Diamond: 0x00FFFF
-  }
-
-  const embed = new EmbedBuilder()
-    .setColor(colors[data.rank] || 0xAAAAAA)
-    .setAuthor({
-      name: data.username,
-      iconURL: `https://mc-heads.net/avatar/${encodeURIComponent(data.username)}`
-    })
-    .setDescription(`💬 **Message**\n> ${data.message}`)
-    .addFields({
-      name: "🏷 Rank",
-      value: `\`${data.rank}\``,
-      inline: true
-    })
-    .setTimestamp()
-
-  await channel.send({ embeds: [embed] })
 }
 
 // ================= START =================
