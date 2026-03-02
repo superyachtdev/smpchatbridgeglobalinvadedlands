@@ -8,9 +8,75 @@ let bot
 let discordClient
 let alreadyWalking = false
 
+// ================= MEMORY =================
+const massMessageTracker = new Map()
+
 console.log("====================================")
 console.log("Container started at:", new Date().toISOString())
 console.log("====================================")
+
+// ================= RULE KEYWORDS =================
+
+const INAPPROPRIATE = [
+  "have sex","sex with","porn","nsfw","onlyfans",
+  "deepthroat","send nudes","rape joke",
+  "hitler was right","9/11 was funny"
+]
+
+const TOXICITY = [
+  "fuck you","fk you","f u","stfu",
+  "you suck","idiot","loser","no life"
+]
+
+const SUICIDE = [
+  "kys","kill yourself","slit your wrists",
+  "hope you die","hope you get cancer",
+  "hope your mom dies"
+]
+
+const THREATS = [
+  "i will find you","i will kill you",
+  "kill your family","i'll dox you",
+  "pull your ip"
+]
+
+const FAKE_PATTERNS = [
+  "has been banned",
+  "has been permanently banned",
+  "has been muted",
+  "you have been banned"
+]
+
+const SLURS = [
+  "nigger","faggot","tranny",
+  "dirty jew","i hate gays",
+  "i hate blacks","i hate jews",
+  "cracker"
+]
+
+const LINK_REGEX = /(discord\.gg|https?:\/\/(?!.*invadedlands))/i
+
+const SOLICITATION = [
+  "selling account",
+  "buying rank for",
+  "selling robux",
+  "selling vbucks",
+  "paypal me","cashapp me",
+  "trading riot points"
+]
+
+const BYPASS_REGEX = [
+  /f\s*u\s*c\s*k\s*you/i,
+  /k\s*y\s*s/i,
+  /n\s*i\s*g\s*g/i
+]
+
+const PRIVATE_INFO_REGEX = [
+  /\b\d{1,3}(\.\d{1,3}){3}\b/,
+  /\b\d{3}-\d{2}-\d{4}\b/,
+  /instagram\.com\//i,
+  /snapchat\.com\//i
+]
 
 // ================= DISCORD =================
 async function startDiscord() {
@@ -22,7 +88,7 @@ async function startDiscord() {
   console.log("🤖 Discord connected:", discordClient.user.tag)
 }
 
-// ================= MINECRAFT BOT =================
+// ================= BOT =================
 function startBot() {
   console.log("🚀 Starting SMP Bot...")
 
@@ -44,18 +110,8 @@ function startBot() {
     setTimeout(() => walkToNPC(), 5000)
   })
 
-  bot.on("kicked", reason => {
-    console.log("🚫 Kicked:", reason)
-  })
-
-  bot.on("error", err => {
-    console.log("❌ Error:", err.message)
-  })
-
   bot.on("message", (jsonMsg) => {
     const raw = jsonMsg.toString().trim()
-    console.log("📨 RAW:", raw)
-
     if (!raw.includes(":")) return
 
     const colon = raw.indexOf(":")
@@ -76,12 +132,19 @@ function startBot() {
 
     if (!username) return
 
-    console.log(`[SMP CHAT] ${username}: ${chat}`)
-    sendToDiscord({ username, rank, message: chat })
+    const data = {
+      username,
+      rank,
+      message: chat,
+      lower: chat.toLowerCase()
+    }
+
+    sendToDiscord(data)
+    runModeration(data)
   })
 }
 
-// ================= WALK + CLICK =================
+// ================= WALK =================
 async function walkToNPC() {
   if (alreadyWalking) return
   alreadyWalking = true
@@ -93,26 +156,18 @@ async function walkToNPC() {
   bot.pathfinder.setGoal(new goals.GoalBlock(54, 94, 691))
 
   bot.once("goal_reached", async () => {
-    console.log("🎯 Reached SMP location")
-
     await bot.waitForTicks(20)
 
-    const entity = bot.nearestEntity(e => {
-      if (!e.position) return false
-      const dist = bot.entity.position.distanceTo(e.position)
-      return (
-        dist < 5 &&
-        (e.type === "mob" || e.type === "player")
-      )
-    })
+    const entity = bot.nearestEntity(e =>
+      e.position &&
+      bot.entity.position.distanceTo(e.position) < 5 &&
+      (e.type === "mob" || e.type === "player")
+    )
 
     if (!entity) {
-      console.log("❌ No NPC found — retrying in 5s")
       alreadyWalking = false
       return setTimeout(walkToNPC, 5000)
     }
-
-    console.log("🖱 Clicking entity:", entity.username || entity.name)
 
     await bot.lookAt(entity.position.offset(0, entity.height, 0), true)
     await bot.waitForTicks(10)
@@ -122,30 +177,105 @@ async function walkToNPC() {
   })
 }
 
-// ================= DISCORD SEND =================
-async function sendToDiscord(data) {
-  try {
-    const channel = await discordClient.channels.fetch(process.env.DISCORD_CHANNEL_ID)
-    if (!channel) return
+// ================= MODERATION =================
+function runModeration(data) {
+  const { lower, message, username } = data
+  let violations = []
 
-    const embed = new EmbedBuilder()
-      .setColor(data.rank === "Diamond" ? 0x00FFFF : 0xAAAAAA)
-      .setAuthor({
-        name: data.username,
-        iconURL: `https://mc-heads.net/avatar/${encodeURIComponent(data.username)}`
-      })
-      .setDescription(`💬 **Message**\n> ${data.message}`)
-      .addFields({
-        name: "🏷 Rank",
-        value: `\`${data.rank}\``,
-        inline: true
-      })
-      .setTimestamp()
+  if (INAPPROPRIATE.some(w => lower.includes(w)))
+    violations.push("Inappropriate Topics")
 
-    await channel.send({ embeds: [embed] })
-  } catch (err) {
-    console.log("❌ Discord error:", err.message)
+  if (TOXICITY.some(w => lower.includes(w)))
+    violations.push("Toxicity")
+
+  if (SUICIDE.some(w => lower.includes(w)))
+    violations.push("Suicide Encouragement")
+
+  if (THREATS.some(w => lower.includes(w)))
+    violations.push("Threats")
+
+  if (FAKE_PATTERNS.some(w => lower.includes(w)))
+    violations.push("Faking Messages")
+
+  if (SLURS.some(w => lower.includes(w)))
+    violations.push("Derogatory Chat")
+
+  if (SOLICITATION.some(w => lower.includes(w)))
+    violations.push("Solicitation")
+
+  if (LINK_REGEX.test(lower))
+    violations.push("Inappropriate Links")
+
+  if (BYPASS_REGEX.some(r => r.test(message)))
+    violations.push("Filter Bypass")
+
+  if (PRIVATE_INFO_REGEX.some(r => r.test(message)))
+    violations.push("Leaking Private Information")
+
+  // MASS MESSAGING (private message only)
+  if (message.startsWith("/msg") || message.startsWith("/w")) {
+    const now = Date.now()
+
+    if (!massMessageTracker.has(username))
+      massMessageTracker.set(username, [])
+
+    const history = massMessageTracker.get(username)
+    history.push({ msg: lower, time: now })
+
+    const recent = history.filter(m => now - m.time < 10000)
+    massMessageTracker.set(username, recent)
+
+    const identical = recent.filter(m => m.msg === lower)
+    if (identical.length >= 3)
+      violations.push("Mass Messaging")
   }
+
+  if (violations.length > 0)
+    sendModerationAlert(data, violations)
+}
+
+// ================= CHAT EMBED =================
+async function sendToDiscord(data) {
+  const channel = await discordClient.channels.fetch(process.env.DISCORD_CHANNEL_ID)
+  if (!channel) return
+
+  const embed = new EmbedBuilder()
+    .setColor(data.rank === "Diamond" ? 0x00FFFF : 0xAAAAAA)
+    .setAuthor({
+      name: data.username,
+      iconURL: `https://mc-heads.net/avatar/${encodeURIComponent(data.username)}`
+    })
+    .setDescription(`💬 **Message**\n> ${data.message}`)
+    .addFields({
+      name: "🏷 Rank",
+      value: `\`${data.rank}\``,
+      inline: true
+    })
+    .setTimestamp()
+
+  await channel.send({ embeds: [embed] })
+}
+
+// ================= MOD ALERT =================
+async function sendModerationAlert(data, violations) {
+  const channel = await discordClient.channels.fetch(process.env.MOD_ALERT_CHANNEL_ID)
+  if (!channel) return
+
+  const embed = new EmbedBuilder()
+    .setColor(0xFF0000)
+    .setTitle("⚠ Potential Rule Violation")
+    .setAuthor({
+      name: data.username,
+      iconURL: `https://mc-heads.net/avatar/${encodeURIComponent(data.username)}`
+    })
+    .addFields(
+      { name: "Server", value: "SMP", inline: true },
+      { name: "Triggered Rules", value: violations.join("\n") },
+      { name: "Message", value: `\`\`\`${data.message}\`\`\`` }
+    )
+    .setTimestamp()
+
+  await channel.send({ embeds: [embed] })
 }
 
 // ================= START =================
