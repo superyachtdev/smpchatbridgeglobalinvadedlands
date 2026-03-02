@@ -52,25 +52,36 @@ function startBot() {
   })
 
   bot.on("kicked", (reason) => {
-    console.log("🚫 Kicked from server:", reason)
-  })
+  console.log("🚫 Kicked:", reason)
 
-  bot.on("error", (err) => {
-    console.log("❌ Bot error:", err)
-  })
+  if (reason.includes("already connected")) {
+    console.log("🛑 Not reconnecting — account already online.")
+    return
+  }
+})
 
-  bot.on("end", () => {
-    console.log("⚠ Connection ended")
+bot.on("error", (err) => {
+  console.log("❌ Bot error:", err.message)
 
-    if (reconnecting) return
-    reconnecting = true
+  if (err.message.includes("Failed to obtain profile data")) {
+    console.log("🛑 Auth failure detected. Not reconnecting.")
+    return
+  }
+})
 
-    console.log("⏳ Reconnecting in 10 seconds...")
-    setTimeout(() => {
-      reconnecting = false
-      startBot()
-    }, 10000)
-  })
+bot.on("end", () => {
+  console.log("⚠ Connection ended")
+
+  if (reconnecting) return
+  reconnecting = true
+
+  console.log("⏳ Reconnecting in 15 seconds...")
+
+  setTimeout(() => {
+    reconnecting = false
+    startBot()
+  }, 15000)
+})
 
   bot.on("message", (jsonMsg) => {
     const raw = jsonMsg.toString().trim()
