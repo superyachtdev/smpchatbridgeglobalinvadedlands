@@ -9,6 +9,7 @@ let discordClient
 let alreadyWalking = false
 let smpOnline = 0
 let statusMessage = null
+let updatingEmbed = false
 
 // ================= MEMORY =================
 const massMessageTracker = new Map()
@@ -92,11 +93,13 @@ const PRIVATE_INFO_REGEX = [
 // ================= DISCORD =================
 async function startDiscord() {
   discordClient = new Client({
-    intents: [GatewayIntentBits.Guilds]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
   })
 
   await discordClient.login(process.env.DISCORD_TOKEN)
   console.log("🤖 Discord connected:", discordClient.user.tag)
+
+  await initializeStatusMessage()
 }
 
 // ================= BOT =================
@@ -306,19 +309,37 @@ async function sendModerationAlert(data, violations) {
   await channel.send({ embeds: [embed] })
 }
 
-async function updateStatusEmbed() {
+async function initializeStatusMessage() {
   const channel = await discordClient.channels.fetch(process.env.STATUS_CHANNEL_ID)
   if (!channel) return
+
+  const messages = await channel.messages.fetch({ limit: 5 })
+  const botMessage = messages.find(msg => msg.author.id === discordClient.user.id)
+
+  if (botMessage) {
+    statusMessage = botMessage
+    console.log("♻ Reusing existing SMP status embed")
+  }
+}
+
+async function updateStatusEmbed() {
+  if (updatingEmbed) return
+  updatingEmbed = true
+
+  const channel = await discordClient.channels.fetch(process.env.STATUS_CHANNEL_ID)
+  if (!channel) {
+    updatingEmbed = false
+    return
+  }
 
   const maxPlayers = 200
   const percent = Math.min((smpOnline / maxPlayers), 1)
   const filledBars = Math.round(percent * 10)
   const emptyBars = 10 - filledBars
-
   const progressBar = "🟨".repeat(filledBars) + "⬛".repeat(emptyBars)
 
   const embed = new EmbedBuilder()
-    .setColor(0x2ACFDB) // same gold style
+    .setColor(0x2ACFDB)
     .setTitle("🌍 SMP")
     .setDescription("```yaml\nSTATUS: Online\n```")
     .addFields(
@@ -341,6 +362,8 @@ async function updateStatusEmbed() {
   } else {
     await statusMessage.edit({ embeds: [embed] })
   }
+
+  updatingEmbed = false
 }
 
 // ================= START =================
