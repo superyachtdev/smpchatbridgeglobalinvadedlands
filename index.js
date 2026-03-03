@@ -352,8 +352,14 @@ async function initializeStatusMessage() {
   const channel = await discordClient.channels.fetch(process.env.STATUS_CHANNEL_ID)
   if (!channel) return
 
-  const messages = await channel.messages.fetch({ limit: 5 })
-  const botMessage = messages.find(msg => msg.author.id === discordClient.user.id)
+  const messages = await channel.messages.fetch({ limit: 10 })
+
+  const botMessage = messages.find(
+    msg =>
+      msg.author.id === discordClient.user.id &&
+      msg.embeds.length > 0 &&
+      msg.embeds[0].title?.includes("SMP")
+  )
 
   if (botMessage) {
     statusMessage = botMessage
