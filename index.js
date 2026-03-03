@@ -129,9 +129,19 @@ function startBot() {
 bot.on("message", async (jsonMsg) => {
   const raw = jsonMsg.toString().trim()
 
-  // ================= SMP JOIN DETECTION =================
-  // Start /online polling once we detect SMP player format
+  // ================= ONLINE COUNT DETECTION =================
+  const onlineMatch = raw.match(/\((\d+)\/(\d+)\)/)
 
+  if (onlineMatch) {
+    const current = parseInt(onlineMatch[1])
+    const detectedMax = parseInt(onlineMatch[2])
+
+    if (detectedMax === 200) {
+      smpOnline = current
+      await updateStatusEmbed()
+      return
+    }
+  }
 
   // ================= NORMAL CHAT HANDLING =================
   if (!raw.includes(":")) return
