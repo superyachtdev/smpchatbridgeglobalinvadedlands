@@ -115,13 +115,27 @@ function startBot() {
   bot.loadPlugin(pathfinder)
 
   bot.once("spawn", () => {
-    console.log("🌍 Spawned in HUB")
-    setTimeout(() => walkToNPC(), 5000)
-  })
+  console.log("🌍 Spawned in HUB")
+  setTimeout(() => walkToNPC(), 5000)
 
-  bot.on("message", (jsonMsg) => {
-    const raw = jsonMsg.toString().trim()
-    if (!raw.includes(":")) return
+  // Start polling player count
+  setInterval(() => {
+    bot.chat("/online")
+  }, 5000)
+})
+
+  bot.on("message", async (jsonMsg) => {
+  const raw = jsonMsg.toString().trim()
+
+  // ================= ONLINE COUNT DETECTION =================
+  const onlineMatch = raw.match(/There is \((\d+)\/300\) players online\./)
+  if (onlineMatch) {
+    smpOnline = parseInt(onlineMatch[1])
+    await updateStatusEmbed()
+    return
+  }
+
+  if (!raw.includes(":")) return
 
     const colon = raw.indexOf(":")
     let before = raw.slice(0, colon).trim()
@@ -288,6 +302,43 @@ async function sendModerationAlert(data, violations) {
     .setTimestamp()
 
   await channel.send({ embeds: [embed] })
+}
+
+async function updateStatusEmbed() {
+  const channel = await discordClient.channels.fetch(process.env.STATUS_CHANNEL_ID)
+  if (!channel) return
+
+  const maxPlayers = 300
+  const percent = Math.min((smpOnline / maxPlayers), 1)
+  const filledBars = Math.round(percent * 10)
+  const emptyBars = 10 - filledBars
+
+  const progressBar = "🟨".repeat(filledBars) + "⬛".repeat(emptyBars)
+
+  const embed = new EmbedBuilder()
+    .setColor(0xF1C40F) // same gold style
+    .setTitle("🌍 SMP")
+    .setDescription("```yaml\nSTATUS: Online\n```")
+    .addFields(
+      {
+        name: "👥 Players Online",
+        value: `**${smpOnline} / ${maxPlayers}**`,
+        inline: false
+      },
+      {
+        name: "📊 Capacity",
+        value: `${progressBar}  **${Math.round(percent * 100)}%**`,
+        inline: false
+      }
+    )
+    .setFooter({ text: "Live updating every 5 seconds" })
+    .setTimestamp()
+
+  if (!statusMessage) {
+    statusMessage = await channel.send({ embeds: [embed] })
+  } else {
+    await statusMessage.edit({ embeds: [embed] })
+  }
 }
 
 // ================= START =================
