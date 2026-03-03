@@ -139,12 +139,16 @@ function startBot() {
     const raw = jsonMsg.toString().trim()
 
     // ================= ONLINE COUNT DETECTION =================
-    const onlineMatch = raw.match(/\((\d+)\/200\)/)
-    if (onlineMatch) {
-      smpOnline = parseInt(onlineMatch[1])
-      await updateStatusEmbed()
-      return
-    }
+    const onlineMatch = raw.match(/\((\d+)\/(\d+)\)/)
+if (onlineMatch) {
+  smpOnline = parseInt(onlineMatch[1])
+  const detectedMax = parseInt(onlineMatch[2])
+
+  if (detectedMax !== 200) return // Ignore non-SMP counts
+
+  await updateStatusEmbed()
+  return
+}
 
     if (!raw.includes(":")) return
 
