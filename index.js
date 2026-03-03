@@ -129,77 +129,64 @@ function startBot() {
 bot.on("message", async (jsonMsg) => {
   const raw = jsonMsg.toString().trim()
 
-  // Detect actual SMP join message
-  if (raw.includes("Welcome to SMP") || raw.includes("SMP")) {
-    console.log("✅ Confirmed inside SMP")
-
-    if (onlineInterval) clearInterval(onlineInterval)
-
-    onlineInterval = setInterval(() => {
-      if (bot && bot.player) {
-        bot.chat("/online")
-      }
-    }, 5000)
-  }
-
+  // ================= SMP JOIN DETECTION =================
+  // Start /online polling once we detect SMP player format
   const onlineMatch = raw.match(/\((\d+)\/(\d+)\)/)
-  if (onlineMatch) {
-    const detectedMax = parseInt(onlineMatch[2])
-    if (detectedMax !== 200) return
 
-    smpOnline = parseInt(onlineMatch[1])
-    await updateStatusEmbed()
-    return
+  if (onlineMatch) {
+    const current = parseInt(onlineMatch[1])
+    const detectedMax = parseInt(onlineMatch[2])
+
+    if (detectedMax === 200) {
+      // We are inside SMP
+      smpOnline = current
+
+      if (!onlineInterval) {
+        console.log("✅ Confirmed inside SMP — starting /online polling")
+
+        onlineInterval = setInterval(() => {
+          if (bot && bot.player) {
+            bot.chat("/online")
+          }
+        }, 5000)
+      }
+
+      await updateStatusEmbed()
+      return
+    }
   }
 
-  // rest of message logic...
+  // ================= NORMAL CHAT HANDLING =================
+  if (!raw.includes(":")) return
+
+  const colon = raw.indexOf(":")
+  let before = raw.slice(0, colon).trim()
+  const chat = raw.slice(colon + 1).trim()
+  if (!chat) return
+
+  let rank = "Default"
+  if (before.startsWith("+")) {
+    rank = "Diamond"
+    before = before.substring(1).trim()
+  }
+
+  const username = before
+    .replace(/§[0-9a-fk-or]/gi, "")
+    .replace(/&[0-9a-fk-or]/gi, "")
+    .trim()
+
+  if (!username) return
+
+  const data = {
+    username,
+    rank,
+    message: chat,
+    lower: chat.toLowerCase()
+  }
+
+  sendToDiscord(data)
+  runModeration(data)
 })
-
-  bot.on("message", async (jsonMsg) => {
-    const raw = jsonMsg.toString().trim()
-
-    // ================= ONLINE COUNT DETECTION =================
-    const onlineMatch = raw.match(/\((\d+)\/(\d+)\)/)
-if (onlineMatch) {
-  smpOnline = parseInt(onlineMatch[1])
-  const detectedMax = parseInt(onlineMatch[2])
-
-  if (detectedMax !== 200) return // Ignore non-SMP counts
-
-  await updateStatusEmbed()
-  return
-}
-
-    if (!raw.includes(":")) return
-
-    const colon = raw.indexOf(":")
-    let before = raw.slice(0, colon).trim()
-    const chat = raw.slice(colon + 1).trim()
-    if (!chat) return
-
-    let rank = "Default"
-    if (before.startsWith("+")) {
-      rank = "Diamond"
-      before = before.substring(1).trim()
-    }
-
-    const username = before
-      .replace(/§[0-9a-fk-or]/gi, "")
-      .replace(/&[0-9a-fk-or]/gi, "")
-      .trim()
-
-    if (!username) return
-
-    const data = {
-      username,
-      rank,
-      message: chat,
-      lower: chat.toLowerCase()
-    }
-
-    sendToDiscord(data)
-    runModeration(data)
-  })
 
   // ================= ERROR HANDLING =================
 
