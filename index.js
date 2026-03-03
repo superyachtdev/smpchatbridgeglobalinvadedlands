@@ -10,6 +10,8 @@ let alreadyWalking = false
 let smpOnline = 0
 let statusMessage = null
 let updatingEmbed = false
+let reconnecting = false
+let onlineInterval = null
 
 // ================= MEMORY =================
 const massMessageTracker = new Map()
@@ -120,27 +122,31 @@ function startBot() {
   bot.loadPlugin(pathfinder)
 
   bot.once("spawn", () => {
-  console.log("🌍 Spawned in HUB")
-  setTimeout(() => walkToNPC(), 5000)
+    console.log("🌍 Spawned in HUB")
+    setTimeout(() => walkToNPC(), 5000)
 
-  // Start polling player count
-  setInterval(() => {
-    bot.chat("/online")
-  }, 5000)
-})
+    // Prevent duplicate intervals after reconnect
+    if (onlineInterval) clearInterval(onlineInterval)
+
+    onlineInterval = setInterval(() => {
+      if (bot && bot.player) {
+        bot.chat("/online")
+      }
+    }, 5000)
+  })
 
   bot.on("message", async (jsonMsg) => {
-  const raw = jsonMsg.toString().trim()
+    const raw = jsonMsg.toString().trim()
 
-  // ================= ONLINE COUNT DETECTION =================
-  const onlineMatch = raw.match(/\((\d+)\/200\)/)
-  if (onlineMatch) {
-    smpOnline = parseInt(onlineMatch[1])
-    await updateStatusEmbed()
-    return
-  }
+    // ================= ONLINE COUNT DETECTION =================
+    const onlineMatch = raw.match(/\((\d+)\/200\)/)
+    if (onlineMatch) {
+      smpOnline = parseInt(onlineMatch[1])
+      await updateStatusEmbed()
+      return
+    }
 
-  if (!raw.includes(":")) return
+    if (!raw.includes(":")) return
 
     const colon = raw.indexOf(":")
     let before = raw.slice(0, colon).trim()
@@ -169,6 +175,29 @@ function startBot() {
 
     sendToDiscord(data)
     runModeration(data)
+  })
+
+  // ================= ERROR HANDLING =================
+
+  bot.on("error", (err) => {
+    console.log("Bot error:", err.code || err.message)
+  })
+
+  bot.on("end", () => {
+    console.log("🔌 Bot disconnected.")
+
+    if (onlineInterval) {
+      clearInterval(onlineInterval)
+      onlineInterval = null
+    }
+
+    if (reconnecting) return
+    reconnecting = true
+
+    setTimeout(() => {
+      reconnecting = false
+      startBot()
+    }, 8000)
   })
 }
 
