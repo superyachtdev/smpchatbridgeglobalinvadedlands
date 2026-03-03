@@ -131,30 +131,7 @@ bot.on("message", async (jsonMsg) => {
 
   // ================= SMP JOIN DETECTION =================
   // Start /online polling once we detect SMP player format
-  const onlineMatch = raw.match(/\((\d+)\/(\d+)\)/)
 
-  if (onlineMatch) {
-    const current = parseInt(onlineMatch[1])
-    const detectedMax = parseInt(onlineMatch[2])
-
-    if (detectedMax === 200) {
-      // We are inside SMP
-      smpOnline = current
-
-      if (!onlineInterval) {
-        console.log("✅ Confirmed inside SMP — starting /online polling")
-
-        onlineInterval = setInterval(() => {
-          if (bot && bot.player) {
-            bot.chat("/online")
-          }
-        }, 5000)
-      }
-
-      await updateStatusEmbed()
-      return
-    }
-  }
 
   // ================= NORMAL CHAT HANDLING =================
   if (!raw.includes(":")) return
@@ -242,6 +219,18 @@ async function walkToNPC() {
     bot.activateEntity(entity)
 
     console.log("✅ Clicked SMP NPC")
+    // Start polling after server transfer delay
+setTimeout(() => {
+  if (onlineInterval) clearInterval(onlineInterval)
+
+  console.log("📊 Starting /online polling")
+
+  onlineInterval = setInterval(() => {
+    if (bot && bot.player) {
+      bot.chat("/online")
+    }
+  }, 5000)
+}, 8000) // wait for transfer to complete
   })
 }
 
