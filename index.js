@@ -310,7 +310,7 @@ async function updateStatusEmbed() {
   const channel = await discordClient.channels.fetch(process.env.STATUS_CHANNEL_ID)
   if (!channel) return
 
-  const maxPlayers = 300
+  const maxPlayers = 200
   const percent = Math.min((smpOnline / maxPlayers), 1)
   const filledBars = Math.round(percent * 10)
   const emptyBars = 10 - filledBars
@@ -318,7 +318,7 @@ async function updateStatusEmbed() {
   const progressBar = "🟨".repeat(filledBars) + "⬛".repeat(emptyBars)
 
   const embed = new EmbedBuilder()
-    .setColor(0x1ABC9C) // same gold style
+    .setColor(0x2ACFDB) // same gold style
     .setTitle("🌍 SMP")
     .setDescription("```yaml\nSTATUS: Online\n```")
     .addFields(
