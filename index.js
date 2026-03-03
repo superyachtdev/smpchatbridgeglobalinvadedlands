@@ -182,22 +182,23 @@ bot.on("message", async (jsonMsg) => {
   })
 
   bot.on("end", () => {
-    console.log("🔌 Bot disconnected.")
+  console.log("🔌 Bot disconnected.")
 
-    if (onlineInterval) {
-      clearInterval(onlineInterval)
-      onlineInterval = null
-    }
+  if (onlineInterval) {
+    clearInterval(onlineInterval)
+    onlineInterval = null
+  }
 
-    if (reconnecting) return
-    reconnecting = true
+  alreadyWalking = false  // 👈 ADD THIS
 
-    setTimeout(() => {
-      reconnecting = false
-      startBot()
-    }, 8000)
-  })
-}
+  if (reconnecting) return
+  reconnecting = true
+
+  setTimeout(() => {
+    reconnecting = false
+    startBot()
+  }, 8000)
+})
 
 // ================= WALK =================
 async function walkToNPC() {
@@ -240,7 +241,7 @@ setTimeout(() => {
       bot.chat("/online")
     }
   }, 5000)
-}, 8000) // wait for transfer to complete
+}, 10000) // wait for transfer to complete
   })
 }
 
