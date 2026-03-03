@@ -199,6 +199,7 @@ bot.on("message", async (jsonMsg) => {
     startBot()
   }, 8000)
 })
+}
 
 // ================= WALK =================
 async function walkToNPC() {
