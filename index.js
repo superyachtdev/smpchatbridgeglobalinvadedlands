@@ -130,7 +130,7 @@ function startBot() {
   const raw = jsonMsg.toString().trim()
 
   // ================= ONLINE COUNT DETECTION =================
-  const onlineMatch = raw.match(/\((\d+)\/300\)/)
+  const onlineMatch = raw.match(/\((\d+)\/200\)/)
   if (onlineMatch) {
     smpOnline = parseInt(onlineMatch[1])
     await updateStatusEmbed()
