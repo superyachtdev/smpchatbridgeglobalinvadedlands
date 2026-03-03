@@ -7,6 +7,8 @@ const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js")
 let bot
 let discordClient
 let alreadyWalking = false
+let smpOnline = 0
+let statusMessage = null
 
 // ================= MEMORY =================
 const massMessageTracker = new Map()
@@ -128,7 +130,7 @@ function startBot() {
   const raw = jsonMsg.toString().trim()
 
   // ================= ONLINE COUNT DETECTION =================
-  const onlineMatch = raw.match(/There is \((\d+)\/300\) players online\./)
+  const onlineMatch = raw.match(/\((\d+)\/300\)/)
   if (onlineMatch) {
     smpOnline = parseInt(onlineMatch[1])
     await updateStatusEmbed()
@@ -316,7 +318,7 @@ async function updateStatusEmbed() {
   const progressBar = "🟨".repeat(filledBars) + "⬛".repeat(emptyBars)
 
   const embed = new EmbedBuilder()
-    .setColor(0xF1C40F) // same gold style
+    .setColor(0x1ABC9C) // same gold style
     .setTitle("🌍 SMP")
     .setDescription("```yaml\nSTATUS: Online\n```")
     .addFields(
