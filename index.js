@@ -122,10 +122,17 @@ function startBot() {
   bot.loadPlugin(pathfinder)
 
   bot.once("spawn", () => {
-    console.log("🌍 Spawned in HUB")
-    setTimeout(() => walkToNPC(), 5000)
+  console.log("🌍 Spawned in HUB")
+  setTimeout(() => walkToNPC(), 5000)
+})
 
-    // Prevent duplicate intervals after reconnect
+bot.on("message", async (jsonMsg) => {
+  const raw = jsonMsg.toString().trim()
+
+  // Detect actual SMP join message
+  if (raw.includes("Welcome to SMP") || raw.includes("SMP")) {
+    console.log("✅ Confirmed inside SMP")
+
     if (onlineInterval) clearInterval(onlineInterval)
 
     onlineInterval = setInterval(() => {
@@ -133,7 +140,20 @@ function startBot() {
         bot.chat("/online")
       }
     }, 5000)
-  })
+  }
+
+  const onlineMatch = raw.match(/\((\d+)\/(\d+)\)/)
+  if (onlineMatch) {
+    const detectedMax = parseInt(onlineMatch[2])
+    if (detectedMax !== 200) return
+
+    smpOnline = parseInt(onlineMatch[1])
+    await updateStatusEmbed()
+    return
+  }
+
+  // rest of message logic...
+})
 
   bot.on("message", async (jsonMsg) => {
     const raw = jsonMsg.toString().trim()
