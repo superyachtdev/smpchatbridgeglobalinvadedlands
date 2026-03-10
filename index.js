@@ -3,6 +3,8 @@ require("dotenv").config()
 const mineflayer = require("mineflayer")
 const { pathfinder, Movements, goals } = require("mineflayer-pathfinder")
 const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js")
+const fs = require("fs")
+const path = require("path")
 
 let bot
 let discordClient
@@ -32,6 +34,7 @@ const CPI_ITEMS = {
 
 const CPI_SAMPLE_SIZE = 3
 const CPI_MIN_SAMPLE = 1
+const DATA_FILE = path.join(__dirname, "auth_cache", "smp_inflation_data.json")
 
 // ================= MEMORY =================
 const massMessageTracker = new Map()
@@ -124,6 +127,48 @@ async function startDiscord() {
   await initializeStatusMessage()
 }
 
+function loadInflationData() {
+
+  try {
+
+    if (fs.existsSync(DATA_FILE)) {
+
+      const raw = fs.readFileSync(DATA_FILE, "utf8")
+      const parsed = JSON.parse(raw)
+
+      auctionHistory = parsed.auctionHistory || []
+      lastAuctionBasket = parsed.lastAuctionBasket || null
+
+      console.log("📂 Loaded SMP CPI history:", auctionHistory.length, "entries")
+
+    }
+
+  } catch (err) {
+
+    console.log("Failed to load SMP CPI data:", err.message)
+
+  }
+
+}
+
+function saveInflationData(){
+
+  try {
+
+    const data = {
+      auctionHistory,
+      lastAuctionBasket
+    }
+
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2))
+
+  } catch (err) {
+
+    console.log("Failed to save SMP CPI data:", err.message)
+
+  }
+
+}
 // ================= BOT =================
 function startBot() {
   console.log("🚀 Starting SMP Bot...")
@@ -573,6 +618,7 @@ function finalizeAuctionBasket(){
     e => Date.now() - e.time <= 24 * 60 * 60 * 1000
   )
 
+   saveInflationData()
   updateAuctionEmbed()
 
   auctionScanning = false
@@ -757,6 +803,7 @@ async function updateStatusEmbed() {
 // ================= START =================
 async function init() {
   await startDiscord()
+  loadInflationData()
   startBot()
 }
 
