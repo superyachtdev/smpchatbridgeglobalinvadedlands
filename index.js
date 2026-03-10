@@ -12,6 +12,26 @@ let statusMessage = null
 let updatingEmbed = false
 let reconnecting = false
 let onlineInterval = null
+// ================= SMP AUCTION CPI TRACKER =================
+let auctionHistory = []
+let lastAuctionBasket = null
+let auctionMessage = null
+let auctionScanning = false
+
+let pagesScanned = 0
+const MAX_AH_PAGES = 10
+
+const CPI_ITEMS = {
+  "Elytra": [],
+  "Enchanted Golden Apple": [],
+  "Cow Spawner": [],
+  "Sheep Spawner": [],
+  "Netherite Ingot": [],
+  "Mace": []
+}
+
+const CPI_SAMPLE_SIZE = 3
+const CPI_MIN_SAMPLE = 1
 
 // ================= MEMORY =================
 const massMessageTracker = new Map()
@@ -124,6 +144,15 @@ function startBot() {
   bot.once("spawn", () => {
   console.log("🌍 Spawned in HUB")
   setTimeout(() => walkToNPC(), 5000)
+
+  setInterval(() => {
+
+  if (!bot || !bot.player) return
+  if (auctionScanning) return
+
+  scanAuctionHouse()
+
+}, 300000) // every 5 minutes
 })
 
 bot.on("message", async (jsonMsg) => {
@@ -326,6 +355,269 @@ async function sendToDiscord(data) {
     .setTimestamp()
 
   await channel.send({ embeds: [embed] })
+}
+
+async function scanAuctionHouse() {
+
+  if (auctionScanning) return
+
+  auctionScanning = true
+  pagesScanned = 0
+
+  console.log("📊 Starting SMP AH CPI scan")
+
+  for (const item in CPI_ITEMS) {
+    CPI_ITEMS[item] = []
+  }
+
+  try {
+
+    bot.chat("/ah")
+
+    const window = await waitForWindow()
+
+    await parseAuctionPage(window)
+
+  } catch (err) {
+
+    console.log("❌ AH scan failed:", err)
+    auctionScanning = false
+
+  }
+
+}
+
+function waitForWindow(timeout = 10000) {
+
+  return new Promise((resolve, reject) => {
+
+    const timer = setTimeout(() => {
+      reject(new Error("Window open timeout"))
+    }, timeout)
+
+    bot.once("windowOpen", window => {
+      clearTimeout(timer)
+      resolve(window)
+    })
+
+  })
+
+}
+
+async function parseAuctionPage(window) {
+
+  pagesScanned++
+
+  for (let i = 0; i < 45; i++) {
+
+    const slot = window.slots[i]
+    if (!slot) continue
+
+    let displayName = slot.nbt?.value?.display?.value?.Name?.value
+    let lore = slot.nbt?.value?.display?.value?.Lore?.value
+
+    let textLines = []
+
+    if (displayName) {
+
+      try {
+
+        const parsed = JSON.parse(displayName)
+
+        if (parsed.text) textLines.push(parsed.text)
+
+        if (parsed.extra) {
+          for (const part of parsed.extra) {
+            if (part.text) textLines.push(part.text)
+          }
+        }
+
+      } catch {
+
+        textLines.push(String(displayName))
+
+      }
+
+    }
+
+    if (lore) {
+
+      if (!Array.isArray(lore)) lore = [lore]
+
+      for (const line of lore) {
+        textLines.push(String(line?.value ?? line?.text ?? line ?? ""))
+      }
+
+    }
+
+    if (textLines.length === 0) continue
+
+    let itemName = null
+    let price = null
+
+    const baseName = slot.name ? slot.name.toLowerCase() : ""
+
+    for (const text of textLines) {
+
+      const normalized = text
+        .replace(/§[0-9a-fk-or]/gi,"")
+        .replace(/&[0-9a-fk-or]/gi,"")
+        .toLowerCase()
+
+      if (baseName === "elytra") itemName = "Elytra"
+
+      if (normalized.includes("enchanted golden apple"))
+        itemName = "Enchanted Golden Apple"
+
+      if (baseName === "netherite_ingot")
+        itemName = "Netherite Ingot"
+
+      if (baseName === "mace")
+        itemName = "Mace"
+
+      if (baseName.includes("spawner")) {
+
+        if (normalized.includes("cow")) itemName = "Cow Spawner"
+        if (normalized.includes("sheep")) itemName = "Sheep Spawner"
+
+      }
+
+      const match = text.match(/\$([\d,\.]+)/)
+
+      if (match) {
+        price = parseFloat(match[1].replace(/,/g,""))
+      }
+
+    }
+
+    if (!itemName || !price) continue
+
+    if (CPI_ITEMS[itemName].length < CPI_SAMPLE_SIZE) {
+
+      const count = slot.count || 1
+      const unitPrice = price / count
+
+      CPI_ITEMS[itemName].push(unitPrice)
+
+      console.log(`💰 SMP listing: ${itemName} $${unitPrice}`)
+
+    }
+
+  }
+
+  const done = Object.values(CPI_ITEMS).every(v => v.length >= CPI_SAMPLE_SIZE)
+
+  if (done || pagesScanned >= MAX_AH_PAGES) {
+    finalizeAuctionBasket()
+    return
+  }
+
+  const nextButton = window.slots[53]
+
+  if (!nextButton) {
+    finalizeAuctionBasket()
+    return
+  }
+
+  bot.clickWindow(53,0,0)
+
+  bot.once("windowOpen", async next => {
+    await parseAuctionPage(next)
+  })
+
+}
+
+function median(arr){
+
+  const sorted = [...arr].sort((a,b)=>a-b)
+  const mid = Math.floor(sorted.length/2)
+
+  return sorted.length % 2
+    ? sorted[mid]
+    : (sorted[mid-1]+sorted[mid])/2
+
+}
+
+function finalizeAuctionBasket(){
+
+  let basket = 0
+
+  for (const item in CPI_ITEMS){
+
+    const prices = CPI_ITEMS[item]
+    if (!prices.length) continue
+
+    const med = median(prices)
+
+    basket += med
+
+  }
+
+  if (basket <= 0){
+    auctionScanning = false
+    return
+  }
+
+  lastAuctionBasket = basket
+
+  auctionHistory.push({
+    time: Date.now(),
+    basket
+  })
+
+  auctionHistory = auctionHistory.filter(
+    e => Date.now() - e.time <= 24 * 60 * 60 * 1000
+  )
+
+  updateAuctionEmbed()
+
+  auctionScanning = false
+
+}
+
+async function updateAuctionEmbed(){
+
+  const channel = await discordClient.channels.fetch(process.env.SMP_INFLATION_CHANNEL_ID)
+  if (!channel) return
+
+  function itemStatus(item){
+    if (!CPI_ITEMS[item] || CPI_ITEMS[item].length === 0)
+      return `❌ ${item}`
+    else
+      return `✅ ${item}`
+  }
+
+  const basketList =
+    itemStatus("Elytra")+"\n"+
+    itemStatus("Enchanted Golden Apple")+"\n"+
+    itemStatus("Cow Spawner")+"\n"+
+    itemStatus("Sheep Spawner")+"\n"+
+    itemStatus("Netherite Ingot")+"\n"+
+    itemStatus("Mace")
+
+  const embed = new EmbedBuilder()
+    .setColor(0x2ECC71)
+    .setTitle("🧺 SMP Core Inflation")
+    .setDescription(
+      `**Tracked Basket**\n${basketList}\n\n`+
+      `**Basket Value**\n$${lastAuctionBasket?.toLocaleString() || "Collecting"}`
+    )
+    .setFooter({ text:"InvadedLands Economy" })
+    .setTimestamp()
+
+  try{
+
+    if(!auctionMessage)
+      auctionMessage = await channel.send({embeds:[embed]})
+    else
+      await auctionMessage.edit({embeds:[embed]})
+
+  }catch{
+
+    auctionMessage = await channel.send({embeds:[embed]})
+
+  }
+
 }
 
 // ================= MOD ALERT =================
