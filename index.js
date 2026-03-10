@@ -464,23 +464,27 @@ async function parseAuctionPage(window) {
         .replace(/&[0-9a-fk-or]/gi,"")
         .toLowerCase()
 
-      if (baseName === "elytra") itemName = "Elytra"
+      if (baseName === "elytra")
+  itemName = "Elytra"
 
-      if (normalized.includes("enchanted golden apple"))
-        itemName = "Enchanted Golden Apple"
+if (baseName === "enchanted_golden_apple")
+  itemName = "Enchanted Golden Apple"
 
-      if (baseName === "netherite_ingot")
-        itemName = "Netherite Ingot"
+if (baseName === "netherite_ingot")
+  itemName = "Netherite Ingot"
 
-      if (baseName === "mace")
-        itemName = "Mace"
+if (baseName === "mace")
+  itemName = "Mace"
 
-      if (baseName.includes("spawner")) {
+if (baseName.includes("spawner")) {
 
-        if (normalized.includes("cow")) itemName = "Cow Spawner"
-        if (normalized.includes("sheep")) itemName = "Sheep Spawner"
+  if (normalized.includes("cow"))
+    itemName = "Cow Spawner"
 
-      }
+  if (normalized.includes("sheep"))
+    itemName = "Sheep Spawner"
+
+}
 
       const match = text.match(/\$([\d,\.]+)/)
 
@@ -575,10 +579,53 @@ function finalizeAuctionBasket(){
 
 }
 
+function calculateAuctionInflation(minutes){
+
+  const now = Date.now()
+
+  const currentSamples = auctionHistory.filter(
+    e => now - e.time <= 15 * 60 * 1000
+  )
+
+  const pastSamples = auctionHistory.filter(
+    e =>
+      now - e.time >= minutes * 60 * 1000 &&
+      now - e.time <= minutes * 60 * 1000 + (15 * 60 * 1000)
+  )
+
+  if (!currentSamples.length || !pastSamples.length)
+    return null
+
+  const currentAvg =
+    currentSamples.reduce((s,e)=>s+e.basket,0)/currentSamples.length
+
+  const pastAvg =
+    pastSamples.reduce((s,e)=>s+e.basket,0)/pastSamples.length
+
+  if (pastAvg <= 0) return null
+
+  return ((currentAvg - pastAvg) / pastAvg) * 100
+
+}
+
 async function updateAuctionEmbed(){
 
   const channel = await discordClient.channels.fetch(process.env.SMP_INFLATION_CHANNEL_ID)
   if (!channel) return
+
+  const infl30 = calculateAuctionInflation(30)
+  const infl60 = calculateAuctionInflation(60)
+  const infl720 = calculateAuctionInflation(720)
+  const infl1440 = calculateAuctionInflation(1440)
+
+  function format(percent){
+    if (percent === null) return "⏳ Collecting..."
+
+    const sign = percent >= 0 ? "+" : "-"
+    const emoji = percent >= 0 ? "📈" : "📉"
+
+    return `${emoji} **${sign}${Math.abs(percent).toFixed(2)}% Price Change**`
+  }
 
   function itemStatus(item){
     if (!CPI_ITEMS[item] || CPI_ITEMS[item].length === 0)
@@ -602,20 +649,22 @@ async function updateAuctionEmbed(){
       `**Tracked Basket**\n${basketList}\n\n`+
       `**Basket Value**\n$${lastAuctionBasket?.toLocaleString() || "Collecting"}`
     )
+    .addFields(
+      { name:"⏱ 30 Minutes", value:format(infl30) },
+      { name:"🕐 1 Hour", value:format(infl60) },
+      { name:"🕛 12 Hours", value:format(infl720) },
+      { name:"📅 24 Hours", value:format(infl1440) }
+    )
     .setFooter({ text:"InvadedLands Economy" })
     .setTimestamp()
 
   try{
-
     if(!auctionMessage)
       auctionMessage = await channel.send({embeds:[embed]})
     else
       await auctionMessage.edit({embeds:[embed]})
-
   }catch{
-
     auctionMessage = await channel.send({embeds:[embed]})
-
   }
 
 }
