@@ -554,10 +554,15 @@ if (baseName.includes("spawner")) {
 
   }
 
-  const minimumMet = Object.values(CPI_ITEMS).every(v => v.length >= CPI_MIN_SAMPLE)
+  const listingsCollected =
+  Object.values(CPI_ITEMS).reduce((a,b)=>a+b.length,0)
 
-if (pagesScanned >= MAX_AH_PAGES || minimumMet) {
+if (pagesScanned >= MAX_AH_PAGES || listingsCollected >= 4) {
+
+  console.log("📊 AH scan finished")
+
   finalizeAuctionBasket()
+
   return
 }
 
@@ -589,6 +594,7 @@ function median(arr){
 
 function finalizeAuctionBasket(){
 
+  console.log("finalized cpi basket")
   let basket = 0
 
   for (const item in CPI_ITEMS){
@@ -691,6 +697,7 @@ function calculateAuctionInflation(minutes){
 
 async function updateAuctionEmbed(){
 
+  console.log("updating smp cpi embed")
   const channel = await discordClient.channels.fetch(process.env.SMP_INFLATION_CHANNEL_ID)
   if (!channel) return
 
