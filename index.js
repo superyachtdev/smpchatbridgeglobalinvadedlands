@@ -609,10 +609,21 @@ function finalizeAuctionBasket(){
 
   lastAuctionBasket = basket
 
-  auctionHistory.push({
-    time: Date.now(),
-    basket
-  })
+  const priceSnapshot = {}
+
+for (const item in CPI_ITEMS) {
+
+  const prices = CPI_ITEMS[item]
+  if (!prices.length) continue
+
+  priceSnapshot[item] = median(prices)
+
+}
+
+auctionHistory.push({
+  time: Date.now(),
+  prices: priceSnapshot
+})
 
   auctionHistory = auctionHistory.filter(
     e => Date.now() - e.time <= 24 * 60 * 60 * 1000
@@ -629,28 +640,43 @@ function calculateAuctionInflation(minutes){
 
   const now = Date.now()
 
-  const currentSamples = auctionHistory.filter(
-    e => now - e.time <= 15 * 60 * 1000
-  )
+  const current = auctionHistory
+    .filter(e => now - e.time <= 15 * 60 * 1000)
 
-  const pastSamples = auctionHistory.filter(
-    e =>
+  const past = auctionHistory
+    .filter(e =>
       now - e.time >= minutes * 60 * 1000 &&
       now - e.time <= minutes * 60 * 1000 + (15 * 60 * 1000)
-  )
+    )
 
-  if (!currentSamples.length || !pastSamples.length)
-    return null
+  if (!current.length || !past.length) return null
 
-  const currentAvg =
-    currentSamples.reduce((s,e)=>s+e.basket,0)/currentSamples.length
+  const currentPrices = current[current.length - 1].prices
+  const pastPrices = past[past.length - 1].prices
 
-  const pastAvg =
-    pastSamples.reduce((s,e)=>s+e.basket,0)/pastSamples.length
+  let changes = []
 
-  if (pastAvg <= 0) return null
+  for (const item in currentPrices){
 
-  return ((currentAvg - pastAvg) / pastAvg) * 100
+    if (!pastPrices[item]) continue
+
+    const oldPrice = pastPrices[item]
+    const newPrice = currentPrices[item]
+
+    if (!oldPrice) continue
+
+    const change = ((newPrice - oldPrice) / oldPrice) * 100
+
+    if (isFinite(change))
+      changes.push(change)
+
+  }
+
+  if (!changes.length) return null
+
+  const avg = changes.reduce((a,b)=>a+b,0) / changes.length
+
+  return avg
 
 }
 
