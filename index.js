@@ -554,7 +554,7 @@ if (baseName.includes("spawner")) {
 
   }
 
-  const minimumMet = Object.values(CPI_ITEMS).some(v => v.length >= CPI_MIN_SAMPLE)
+  const minimumMet = Object.values(CPI_ITEMS).every(v => v.length >= CPI_MIN_SAMPLE)
 
 if (pagesScanned >= MAX_AH_PAGES || minimumMet) {
   finalizeAuctionBasket()
@@ -641,18 +641,26 @@ function calculateAuctionInflation(minutes){
   const now = Date.now()
 
   const current = auctionHistory
-    .filter(e => now - e.time <= 15 * 60 * 1000)
+    .filter(e =>
+      e.prices &&
+      now - e.time <= 15 * 60 * 1000
+    )
 
   const past = auctionHistory
     .filter(e =>
+      e.prices &&
       now - e.time >= minutes * 60 * 1000 &&
       now - e.time <= minutes * 60 * 1000 + (15 * 60 * 1000)
     )
 
-  if (!current.length || !past.length) return null
+  if (!current.length || !past.length)
+    return null
 
   const currentPrices = current[current.length - 1].prices
   const pastPrices = past[past.length - 1].prices
+
+  if (!currentPrices || !pastPrices)
+    return null
 
   let changes = []
 
@@ -672,7 +680,8 @@ function calculateAuctionInflation(minutes){
 
   }
 
-  if (!changes.length) return null
+  if (!changes.length)
+    return null
 
   const avg = changes.reduce((a,b)=>a+b,0) / changes.length
 
