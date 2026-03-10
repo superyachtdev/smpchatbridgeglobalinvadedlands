@@ -505,12 +505,12 @@ async function parseAuctionPage(window) {
 
   }
 
-  const done = Object.values(CPI_ITEMS).every(v => v.length >= CPI_SAMPLE_SIZE)
+  const minimumMet = Object.values(CPI_ITEMS).some(v => v.length >= CPI_MIN_SAMPLE)
 
-  if (done || pagesScanned >= MAX_AH_PAGES) {
-    finalizeAuctionBasket()
-    return
-  }
+if (pagesScanned >= MAX_AH_PAGES || minimumMet) {
+  finalizeAuctionBasket()
+  return
+}
 
   const nextButton = window.slots[53]
 
